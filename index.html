@@ -115,6 +115,12 @@
 
 <div class="scroll" id="main-scroll">
 
+  <div class="auth-card hidden" id="key-banner" style="background:var(--amber-light);border-color:rgba(239,159,39,0.3)">
+    <div class="auth-title" style="color:var(--amber)">API Key requerida</div>
+    <div class="auth-desc" style="color:var(--amber)">Necesitas tu Anthropic API Key para usar el asistente de voz.</div>
+    <button class="auth-btn" style="background:var(--amber-mid)" onclick="localStorage.removeItem('anthropic_ak');getKey();document.getElementById('key-banner').classList.add('hidden')">Ingresar API Key</button>
+  </div>
+
   <div class="auth-card" id="auth-card">
     <div class="auth-title">Conectar Google Calendar</div>
     <div class="auth-desc">Inicia sesión con tu cuenta de Google para que pueda crear, modificar y consultar eventos por voz.</div>
@@ -187,7 +193,7 @@
 <script>
 const CLIENT_ID = '665319266974-eqn02btlahecncqfm18hqqbrhbob36r4.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
-const ANTHROPIC_KEY = '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';
+const ANTHROPIC_KEY = localStorage.getItem('anthropic_ak') || '';
 
 let tokenClient = null;
 let accessToken = null;
@@ -299,7 +305,7 @@ async function callClaude(userMsg) {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -465,7 +471,26 @@ function clearChat() {
   document.getElementById('chat-area').innerHTML = '<div class="bubble bubble-assistant">Chat limpiado. ¿En qué te ayudo?</div>';
 }
 
-window.addEventListener('load', loadGoogleScript);
+function getKey() {
+  let k = localStorage.getItem('anthropic_ak');
+  if (!k) {
+    k = prompt('Ingresa tu Anthropic API Key para activar el asistente:');
+    if (k && k.startsWith('sk-')) {
+      localStorage.setItem('anthropic_ak', k);
+    }
+  }
+  return k || '';
+}
+
+function checkKey() {
+  const k = localStorage.getItem('anthropic_ak');
+  if (!k) {
+    const banner = document.getElementById('key-banner');
+    if (banner) banner.classList.remove('hidden');
+  }
+}
+
+window.addEventListener('load', () => { loadGoogleScript(); checkKey(); });
 </script>
 </body>
 </html>
