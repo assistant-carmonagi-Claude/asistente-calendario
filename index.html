@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Agenda Voz">
+<title>Asistente de Agenda</title>
+<style>
+  :root {
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --blue-mid: #378ADD;
+    --green: #27500A;
+    --green-light: #EAF3DE;
+    --amber: #633806;
+    --amber-light: #FAEEDA;
+    --amber-mid: #EF9F27;
+    --pink-light: #FBEAF0;
+    --pink-mid: #D4537E;
+    --gray: #444441;
+    --gray-light: #F1EFE8;
+    --gray-mid: #888780;
+    --red-light: #FCEBEB;
+    --red: #791F1F;
+    --bg: #ffffff;
+    --bg2: #f8f8f6;
+    --border: rgba(0,0,0,0.12);
+    --text: #1a1a18;
+    --text2: #5f5e5a;
+    --text3: #888780;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg2); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; }
+  body { display: flex; flex-direction: column; max-width: 430px; margin: 0 auto; background: var(--bg); min-height: 100dvh; }
+
+  .topbar { padding: 52px 20px 12px; background: var(--bg); border-bottom: 0.5px solid var(--border); position: sticky; top: 0; z-index: 10; }
+  .topbar h1 { font-size: 17px; font-weight: 600; color: var(--text); }
+  .topbar p { font-size: 13px; color: var(--text3); margin-top: 2px; }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; padding-bottom: 40px; }
+
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .card-header { padding: 12px 16px 8px; display: flex; align-items: center; justify-content: space-between; }
+  .card-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; }
+  .card-action { font-size: 13px; color: var(--blue-mid); font-weight: 500; cursor: pointer; }
+
+  .event-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-top: 0.5px solid var(--border); }
+  .event-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .event-time { font-size: 12px; color: var(--text3); min-width: 40px; font-variant-numeric: tabular-nums; }
+  .event-name { font-size: 14px; color: var(--text); flex: 1; }
+  .event-dur { font-size: 11px; color: var(--text3); }
+
+  .mic-section { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 8px 0; }
+  .status-pill { font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: 20px; transition: all 0.2s; }
+  .s-idle { background: var(--gray-light); color: var(--gray); }
+  .s-listening { background: var(--blue-light); color: var(--blue); }
+  .s-processing { background: var(--amber-light); color: var(--amber); }
+  .s-done { background: var(--green-light); color: var(--green); }
+  .s-error { background: var(--red-light); color: var(--red); }
+
+  .mic-wrap { position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
+  .mic-pulse { position: absolute; width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--blue-mid); opacity: 0; pointer-events: none; }
+  .mic-pulse.active { animation: ripple 1.4s ease-out infinite; }
+  @keyframes ripple { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1.6); opacity: 0; } }
+  .mic-btn { width: 80px; height: 80px; border-radius: 50%; background: var(--bg); border: 0.5px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn.listening { border: 2px solid var(--blue-mid); background: var(--blue-light); }
+  .mic-btn.processing { border: 2px solid var(--amber-mid); background: var(--amber-light); }
+  .mic-hint { font-size: 13px; color: var(--text3); }
+
+  .bubble-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .bubble { padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.5; max-width: 88%; }
+  .bubble-user { background: var(--blue-mid); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .bubble-assistant { background: var(--bg2); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; border: 0.5px solid var(--border); }
+  .bubble-typing { display: flex; gap: 4px; align-items: center; padding: 14px 18px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); animation: blink 1.2s ease-in-out infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
+
+  .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 4px 4px; }
+  .quick-btn { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 11px 12px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; line-height: 1.4; transition: background 0.15s; }
+  .quick-btn:active { background: var(--blue-light); }
+  .quick-icon { font-size: 16px; display: block; margin-bottom: 5px; }
+
+  .auth-card { background: var(--blue-light); border: 0.5px solid rgba(55,138,221,0.3); border-radius: var(--radius); padding: 16px; }
+  .auth-title { font-size: 14px; font-weight: 600; color: var(--blue); margin-bottom: 6px; }
+  .auth-desc { font-size: 13px; color: var(--blue); opacity: 0.85; line-height: 1.5; margin-bottom: 12px; }
+  .auth-btn { width: 100%; background: var(--blue-mid); color: #fff; border: none; border-radius: var(--radius-sm); padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .auth-btn:active { background: var(--blue); }
+
+  .input-bar { display: flex; gap: 8px; padding: 12px 16px; background: var(--bg); border-top: 0.5px solid var(--border); position: sticky; bottom: 0; }
+  .text-input { flex: 1; background: var(--bg2); border: 0.5px solid var(--border); border-radius: 22px; padding: 10px 16px; font-size: 15px; color: var(--text); outline: none; -webkit-appearance: none; }
+  .text-input:focus { border-color: var(--blue-mid); }
+  .send-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--blue-mid); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+  .send-btn:active { background: var(--blue); }
+
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none !important; }
+  .section-sep { height: 1px; background: var(--border); margin: 0 16px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Asistente de Agenda</h1>
+  <p id="user-email">Conecta tu Google Calendar para comenzar</p>
+</div>
+
+<div class="scroll" id="main-scroll">
+
+  <div class="auth-card" id="auth-card">
+    <div class="auth-title">Conectar Google Calendar</div>
+    <div class="auth-desc">Inicia sesión con tu cuenta de Google para que pueda crear, modificar y consultar eventos por voz.</div>
+    <button class="auth-btn" onclick="handleAuth()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#fff"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#fff" opacity=".85"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#fff" opacity=".7"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#fff" opacity=".55"/></svg>
+      Iniciar sesión con Google
+    </button>
+  </div>
+
+  <div class="card hidden" id="agenda-card">
+    <div class="card-header">
+      <span class="card-label" id="agenda-date">Hoy</span>
+      <span class="card-action" onclick="loadTodayEvents()">Actualizar</span>
+    </div>
+    <div id="events-container">
+      <div class="event-row"><span style="font-size:13px;color:var(--text3);padding:4px 0">Cargando eventos...</span></div>
+    </div>
+  </div>
+
+  <div class="card" id="chat-card">
+    <div class="card-header">
+      <span class="card-label">Conversación</span>
+      <span class="card-action" onclick="clearChat()">Limpiar</span>
+    </div>
+    <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;" id="chat-area">
+      <div class="bubble bubble-assistant">Hola Juan! Conéctate con Google para empezar. Luego puedes hablar o escribir para gestionar tu agenda.</div>
+    </div>
+  </div>
+
+  <div class="card" id="mic-card">
+    <div class="card-header"><span class="card-label">Control de voz</span></div>
+    <div style="padding:8px 16px 20px">
+      <div class="mic-section">
+        <div class="status-pill s-idle" id="status-pill">Listo para escuchar</div>
+        <div class="mic-wrap">
+          <div class="mic-pulse" id="mic-pulse"></div>
+          <div class="mic-btn" id="mic-btn" onclick="toggleMic()">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="2" width="6" height="12" rx="3" fill="var(--text)" opacity="0.8"/>
+              <path d="M5 10a7 7 0 0014 0" stroke="var(--text)" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.8"/>
+              <line x1="12" y1="17" x2="12" y2="21" stroke="var(--text)" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+              <line x1="9" y1="21" x2="15" y2="21" stroke="var(--text)" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            </svg>
+          </div>
+        </div>
+        <div class="mic-hint" id="mic-hint">Toca para hablar</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-label">Comandos rápidos</span></div>
+    <div class="quick-grid" style="padding:0 12px 12px">
+      <button class="quick-btn" onclick="sendText('¿Qué tengo hoy en mi agenda?')"><span class="quick-icon">📅</span>Ver hoy</button>
+      <button class="quick-btn" onclick="sendText('¿Qué tengo esta semana?')"><span class="quick-icon">📋</span>Ver semana</button>
+      <button class="quick-btn" onclick="sendText('Crear un evento nuevo')"><span class="quick-icon">➕</span>Nuevo evento</button>
+      <button class="quick-btn" onclick="sendText('Modificar un evento')"><span class="quick-icon">✏️</span>Modificar</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="input-bar">
+  <input type="text" class="text-input" id="text-input" placeholder="Escribe un comando..." onkeydown="if(event.key==='Enter')sendFromInput()">
+  <button class="send-btn" onclick="sendFromInput()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+</div>
+
+<script>
+const CLIENT_ID = '665319266974-eqn02btlahecncqfm18hqqbrhbob36r4.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/calendar';
+const ANTHROPIC_KEY = 'REEMPLAZA_CON_TU_ANTHROPIC_API_KEY';
+
+let tokenClient = null;
+let accessToken = null;
+let recognition = null;
+let isListening = false;
+let conversationHistory = [];
+let todayEvents = [];
+
+const SYSTEM_PROMPT = `Eres el asistente de agenda personal de Juan Carmona, emprendedor con empresa de importación en Guarulhos, Brasil.
+Gestionas su Google Calendar. Contexto de su rutina:
+- 5h-7h: Estudio (Hotmart)
+- 7h-8h30: Ejercicio gimnasio + corrida
+- 8h30-12h: Empresa bloque A (foco total)
+- 12h-13h: Almuerzo
+- 13h-15h: Empresa bloque B
+- Mar/Jue 15h-18h: Hijos
+- Mié 20h-22h: Novia
+- Dom 17h-18h: Preparación de semana
+
+Cuando el usuario pide crear/modificar/eliminar un evento, responde con un JSON al final de tu mensaje con este formato exacto:
+<ACTION>{"action":"create","title":"Título","date":"2026-05-04","startTime":"10:00","endTime":"11:00","description":"descripción"}</ACTION>
+Para modificar: <ACTION>{"action":"update","eventId":"ID_DEL_EVENTO","title":"nuevo título","startTime":"nueva hora"}</ACTION>
+Para eliminar: <ACTION>{"action":"delete","eventId":"ID_DEL_EVENTO"}</ACTION>
+Para solo consultar: no incluyas <ACTION>.
+
+Responde siempre en español, de forma breve y natural. Máximo 3 oraciones antes de la acción.`;
+
+function loadGoogleScript() {
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.onload = initGoogleAuth;
+  document.head.appendChild(s);
+}
+
+function initGoogleAuth() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) { setStatus('error', 'Error al conectar'); return; }
+      accessToken = resp.access_token;
+      onAuthSuccess();
+    }
+  });
+}
+
+function handleAuth() {
+  if (!tokenClient) { alert('Cargando Google... intenta en 2 segundos'); return; }
+  tokenClient.requestAccessToken();
+}
+
+function onAuthSuccess() {
+  fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  }).then(r => r.json()).then(info => {
+    document.getElementById('user-email').textContent = info.email || 'Conectado';
+  });
+  document.getElementById('auth-card').classList.add('hidden');
+  document.getElementById('agenda-card').classList.remove('hidden');
+  addBubble('assistant', '¡Conectado! Ya puedo ver y gestionar tu Google Calendar. ¿Qué necesitas?');
+  loadTodayEvents();
+}
+
+async function loadTodayEvents() {
+  if (!accessToken) return;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+  const days = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  document.getElementById('agenda-date').textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}`;
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${start}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=20`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const data = await res.json();
+    todayEvents = data.items || [];
+    renderEvents(todayEvents);
+  } catch(e) { console.error(e); }
+}
+
+const COLORS = ['#AFA9EC','#97C459','#EF9F27','#D4537E','#378ADD','#5DCAA5','#F0997B','#888780'];
+function renderEvents(events) {
+  const container = document.getElementById('events-container');
+  if (!events.length) {
+    container.innerHTML = '<div class="event-row"><span style="font-size:13px;color:var(--text3)">Sin eventos hoy</span></div>';
+    return;
+  }
+  container.innerHTML = events.map((ev, i) => {
+    const start = ev.start?.dateTime ? new Date(ev.start.dateTime) : null;
+    const end = ev.end?.dateTime ? new Date(ev.end.dateTime) : null;
+    const timeStr = start ? start.toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit',hour12:false}) : 'Todo el día';
+    const dur = (start && end) ? Math.round((end-start)/60000) + 'min' : '';
+    return `<div class="event-row">
+      <div class="event-dot" style="background:${COLORS[i % COLORS.length]}"></div>
+      <span class="event-time">${timeStr}</span>
+      <span class="event-name">${ev.summary || 'Sin título'}</span>
+      <span class="event-dur">${dur}</span>
+    </div>`;
+  }).join('');
+}
+
+async function callClaude(userMsg) {
+  conversationHistory.push({ role: 'user', content: userMsg });
+  const eventsContext = todayEvents.length
+    ? '\n\nEventos de hoy en el calendario:\n' + todayEvents.map(e => `- ID:${e.id} | ${e.summary} | ${e.start?.dateTime || e.start?.date}`).join('\n')
+    : '';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT + eventsContext,
+        messages: conversationHistory
+      })
+    });
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'No pude procesar eso.';
+    conversationHistory.push({ role: 'assistant', content: reply });
+    return reply;
+  } catch(e) {
+    return 'Error de conexión. Verifica tu internet.';
+  }
+}
+
+async function parseAndExecute(reply) {
+  const match = reply.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
+  if (!match || !accessToken) return reply.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
+  let action;
+  try { action = JSON.parse(match[1]); } catch(e) { return reply.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim(); }
+  const cleanReply = reply.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
+  if (action.action === 'create') {
+    const event = {
+      summary: action.title,
+      description: action.description || '',
+      start: { dateTime: `${action.date}T${action.startTime}:00`, timeZone: 'America/Sao_Paulo' },
+      end: { dateTime: `${action.date}T${action.endTime}:00`, timeZone: 'America/Sao_Paulo' }
+    };
+    await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(event)
+    });
+    loadTodayEvents();
+    return cleanReply + '\n✅ Evento creado en tu calendario.';
+  }
+  if (action.action === 'delete' && action.eventId) {
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${action.eventId}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    loadTodayEvents();
+    return cleanReply + '\n✅ Evento eliminado.';
+  }
+  if (action.action === 'update' && action.eventId) {
+    const body = {};
+    if (action.title) body.summary = action.title;
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${action.eventId}`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    loadTodayEvents();
+    return cleanReply + '\n✅ Evento actualizado.';
+  }
+  return cleanReply;
+}
+
+function addBubble(role, text) {
+  const area = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = 'bubble bubble-' + role;
+  div.textContent = text;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  document.getElementById('main-scroll').scrollTop = 99999;
+  return div;
+}
+
+function addTyping() {
+  const area = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = 'bubble bubble-assistant bubble-typing';
+  div.id = 'typing-indicator';
+  div.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+async function processInput(text) {
+  if (!text.trim()) return;
+  addBubble('user', text);
+  const typing = addTyping();
+  setStatus('processing', 'Procesando...');
+  const reply = await callClaude(text);
+  const finalReply = await parseAndExecute(reply);
+  typing.remove();
+  addBubble('assistant', finalReply);
+  setStatus('done', 'Listo');
+  if (window.speechSynthesis) {
+    const clean = finalReply.replace(/✅|❌/g, '');
+    const u = new SpeechSynthesisUtterance(clean);
+    u.lang = 'es-ES'; u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  }
+  setTimeout(() => setStatus('idle', 'Listo para escuchar'), 3000);
+}
+
+function sendFromInput() {
+  const inp = document.getElementById('text-input');
+  const val = inp.value.trim();
+  if (!val) return;
+  inp.value = '';
+  processInput(val);
+}
+
+function sendText(text) { processInput(text); }
+
+function setStatus(type, text) {
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill s-' + type;
+  pill.textContent = text;
+}
+
+function toggleMic() {
+  if (isListening) { stopMic(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    addBubble('assistant', 'Reconocimiento de voz no disponible en este navegador. Usa Safari en iPhone.');
+    return;
+  }
+  recognition = new SR();
+  recognition.lang = 'es-ES';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onstart = () => {
+    isListening = true;
+    document.getElementById('mic-btn').classList.add('listening');
+    document.getElementById('mic-pulse').classList.add('active');
+    document.getElementById('mic-hint').textContent = 'Escuchando... toca para detener';
+    setStatus('listening', 'Escuchando...');
+  };
+  recognition.onresult = e => {
+    const text = e.results[0][0].transcript;
+    stopMic();
+    processInput(text);
+  };
+  recognition.onerror = e => {
+    stopMic();
+    if (e.error === 'not-allowed') {
+      addBubble('assistant', 'Permiso de micrófono denegado. Ve a Ajustes > Safari > Micrófono y permite el acceso.');
+    } else {
+      setStatus('error', 'Error al escuchar');
+      setTimeout(() => setStatus('idle', 'Listo para escuchar'), 2000);
+    }
+  };
+  recognition.onend = () => { if (isListening) stopMic(); };
+  recognition.start();
+}
+
+function stopMic() {
+  isListening = false;
+  if (recognition) recognition.stop();
+  document.getElementById('mic-btn').classList.remove('listening');
+  document.getElementById('mic-pulse').classList.remove('active');
+  document.getElementById('mic-hint').textContent = 'Toca para hablar';
+}
+
+function clearChat() {
+  conversationHistory = [];
+  document.getElementById('chat-area').innerHTML = '<div class="bubble bubble-assistant">Chat limpiado. ¿En qué te ayudo?</div>';
+}
+
+window.addEventListener('load', loadGoogleScript);
+</script>
+</body>
+</html>
